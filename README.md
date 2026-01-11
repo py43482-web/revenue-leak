@@ -1,36 +1,146 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Revenue Leak Radar
 
-## Getting Started
+A production-ready B2B SaaS MVP that connects to Stripe, monitors billing data, and displays daily revenue at risk with actionable insights.
 
-First, run the development server:
+## Features
+
+- **Authentication**: Secure email/password auth with HttpOnly cookies
+- **Stripe Integration**: Connect via API key (test and live mode supported)
+- **Daily Revenue Monitoring**: Automated daily scans for 5 types of revenue issues:
+  - Failed payments (past_due invoices)
+  - Failed subscription invoices
+  - Cards expiring in next 30 days
+  - Open chargebacks/disputes
+  - MRR anomaly detection (>10% drops)
+- **Single-Page Dashboard**: Dollar-focused revenue at risk display
+- **Alerts**: Email (SMTP) and Slack webhook notifications
+- **Secure Webhooks**: Stripe webhook handling with signature verification
+
+## Tech Stack
+
+- **Frontend**: Next.js 16 (App Router), React 19, Tailwind CSS v4
+- **Backend**: Next.js API routes
+- **Database**: PostgreSQL with Prisma ORM
+- **Authentication**: Custom email/password with bcrypt
+- **Integrations**: Stripe API + Webhooks
+- **Notifications**: Nodemailer (SMTP) + Slack webhooks
+- **Deployment**: Vercel with Vercel Cron Jobs
+
+## Local Development Setup
+
+### 1. Clone and Install
+
+```bash
+git clone <repo-url>
+cd revenue-leak
+npm install
+```
+
+### 2. Environment Variables
+
+Copy the example environment file:
+
+```bash
+cp .env.example .env
+```
+
+Edit `.env` with your values. **Generate ENCRYPTION_KEY**:
+
+```bash
+openssl rand -hex 32
+```
+
+### 3. Database Setup
+
+Run Prisma migrations:
+
+```bash
+npm run db:migrate:dev
+```
+
+### 4. Run Development Server
 
 ```bash
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Visit `http://localhost:3000` and create an account.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Database Commands
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+```bash
+npm run db:generate        # Generate Prisma Client
+npm run db:migrate:dev     # Create migration (development)
+npm run db:migrate:deploy  # Apply migrations (production)
+npm run db:studio          # Open Prisma Studio
+npm run db:seed            # Seed database (optional)
+```
 
-## Learn More
+## Deployment to Vercel
 
-To learn more about Next.js, take a look at the following resources:
+### 1. Connect Repository
+Push code to GitHub and import in Vercel dashboard.
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+### 2. Environment Variables
+Add all variables from `.env.example` in Vercel dashboard.
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+### 3. Database
+Use Vercel Postgres or external PostgreSQL provider. Run migrations:
 
-## Deploy on Vercel
+```bash
+npx prisma migrate deploy
+```
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+### 4. Stripe Webhook
+Configure in Stripe Dashboard:
+- Endpoint: `https://yourdomain.com/api/webhooks/stripe`
+- Events: `invoice.payment_failed`, `customer.subscription.*`, `charge.dispute.*`
+- Add `STRIPE_WEBHOOK_SECRET` to Vercel
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## Architecture
+
+### Data Models
+- **User** - User accounts with hashed passwords
+- **Organization** - One organization per account
+- **Session** - HttpOnly cookie-based sessions (30 day expiry)
+- **StripeAccount** - Encrypted Stripe API keys
+- **StripeEvent** - Webhook event tracking for idempotency
+- **DailyRevenueSnapshot** - Daily revenue at risk calculations
+- **RevenueIssue** - Individual revenue issues detected
+
+### API Routes
+- `POST /api/auth/signup` - Create account
+- `POST /api/auth/login` - Login
+- `POST /api/auth/logout` - Logout
+- `POST /api/stripe/connect` - Connect Stripe account
+- `GET /api/stripe/account` - Get connection status
+- `DELETE /api/stripe/disconnect` - Disconnect Stripe
+- `GET /api/revenue/snapshot/latest` - Get latest revenue snapshot
+- `GET /api/revenue/issues/today` - Get today's revenue issues
+- `GET /api/cron/daily-revenue-check` - Daily revenue calculation (6 AM UTC)
+- `GET /api/cron/cleanup-sessions` - Session cleanup (3 AM UTC Sundays)
+- `POST /api/webhooks/stripe` - Stripe webhook endpoint
+
+## Revenue Risk Detection
+
+1. **Failed Payments**: Past due invoices with days overdue tracking
+2. **Failed Subscriptions**: Open invoices linked to subscriptions with MRR impact
+3. **Expiring Cards**: Payment methods expiring within 30 days
+4. **Chargebacks**: Disputes needing response or under review
+5. **MRR Anomaly**: >10% drop day-over-day or vs 7-day rolling average
+
+## Security
+
+- Passwords: Bcrypt hashed (10 rounds)
+- Sessions: HttpOnly cookies, 30-day expiry
+- API Keys: AES-256-GCM encrypted in database
+- Webhooks: Stripe signature verification
+- Cron: Protected by `CRON_SECRET` env var
+
+## Disclaimer
+
+Revenue Leak Radar provides revenue risk estimates based on Stripe billing data. Estimates are for informational purposes only and do not guarantee revenue recovery. Always verify critical financial data directly in your Stripe dashboard.
+
+## License
+
+MIT

@@ -1,0 +1,122 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id             String       @id @default(uuid())
+  email          String       @unique
+  passwordHash   String
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  sessions       Session[]
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  @@index([email])
+  @@index([organizationId])
+}
+
+model Session {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  token     String   @unique
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  @@index([token])
+  @@index([userId])
+  @@index([expiresAt])
+}
+
+model Organization {
+  id                  String                  @id @default(uuid())
+  name                String
+  emailEnabled        Boolean                 @default(true)
+  slackEnabled        Boolean                 @default(false)
+  slackWebhookUrl     String?
+  slackWebhookIV      String?
+  users               User[]
+  stripeAccount       StripeAccount?
+  dailySnapshots      DailyRevenueSnapshot[]
+  revenueIssues       RevenueIssue[]
+  stripeEvents        StripeEvent[]
+  createdAt           DateTime                @default(now())
+  updatedAt           DateTime                @updatedAt
+
+  @@index([name])
+}
+
+model StripeAccount {
+  id                 String       @id @default(uuid())
+  organizationId     String       @unique
+  organization       Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  encryptedApiKey    String
+  encryptionIV       String
+  mode               String
+  stripeAccountId    String       @unique
+  stripeAccountName  String?
+  createdAt          DateTime     @default(now())
+  updatedAt          DateTime     @updatedAt
+
+  @@index([organizationId])
+  @@index([stripeAccountId])
+}
+
+model StripeEvent {
+  id             String       @id @default(uuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  stripeEventId  String       @unique
+  eventType      String
+  processed      Boolean      @default(false)
+  receivedAt     DateTime     @default(now())
+
+  @@index([stripeEventId])
+  @@index([organizationId])
+  @@index([processed])
+}
+
+model DailyRevenueSnapshot {
+  id                     String          @id @default(uuid())
+  organizationId         String
+  organization           Organization    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  date                   DateTime        @db.Date
+  totalRevenueAtRisk     Float
+  mrrAffectedPercentage  Float
+  currentMRR             Float
+  issueCountByType       Json
+  isPartial              Boolean         @default(false)
+  revenueIssues          RevenueIssue[]
+  createdAt              DateTime        @default(now())
+
+  @@unique([organizationId, date])
+  @@index([organizationId])
+  @@index([date])
+}
+
+model RevenueIssue {
+  id             String               @id @default(uuid())
+  organizationId String
+  organization   Organization         @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  snapshotId     String
+  snapshot       DailyRevenueSnapshot @relation(fields: [snapshotId], references: [id], onDelete: Cascade)
+  type           String
+  customerEmail  String
+  customerName   String
+  amount         Float
+  priority       String
+  metadata       Json
+  detectedAt     DateTime             @default(now())
+
+  @@index([organizationId])
+  @@index([snapshotId])
+  @@index([type])
+  @@index([priority])
+  @@index([amount])
+}
