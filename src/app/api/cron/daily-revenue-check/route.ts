@@ -61,6 +61,7 @@ export async function GET(request: NextRequest) {
             )
           };
 
+          
           for (const invoice of pastDueInvoices.data) {
             if (invoice.customer && typeof invoice.customer === 'string') {
               try {
