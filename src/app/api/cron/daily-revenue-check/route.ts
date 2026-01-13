@@ -48,11 +48,13 @@ export async function GET(request: NextRequest) {
 
         // 1. Failed Payments (past_due invoices)
         try {
-          const pastDueInvoices = await stripe.invoices.list({
-            status: 'past_due',
+          const invoices = await stripe.invoices.list({
             limit: 100,
           });
 
+          const pastDueInvoices = invoices.data.filter(
+            (invoice) => invoice.status === 'past_due'
+          );
           for (const invoice of pastDueInvoices.data) {
             if (invoice.customer && typeof invoice.customer === 'string') {
               try {
