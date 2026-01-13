@@ -52,6 +52,7 @@ export async function GET(request: NextRequest) {
             status: 'past_due',
             limit: 100,
           });
+          
           for (const invoice of pastDueInvoices.data) {
             if (invoice.customer && typeof invoice.customer === 'string') {
               try {
