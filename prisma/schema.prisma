@@ -8,14 +8,15 @@ datasource db {
 }
 
 model User {
-  id             String       @id @default(uuid())
-  email          String       @unique
+  id             String         @id @default(cuid())
+  email          String         @unique
   passwordHash   String
   organizationId String
-  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  organization   Organization   @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   sessions       Session[]
-  createdAt      DateTime     @default(now())
-  updatedAt      DateTime     @updatedAt
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+  revenueIssues  RevenueIssue[]
 
   @@index([email])
   @@index([organizationId])
@@ -35,34 +36,34 @@ model Session {
 }
 
 model Organization {
-  id                  String                  @id @default(uuid())
-  name                String
-  emailEnabled        Boolean                 @default(true)
-  slackEnabled        Boolean                 @default(false)
-  slackWebhookUrl     String?
-  slackWebhookIV      String?
-  users               User[]
-  stripeAccount       StripeAccount?
-  dailySnapshots      DailyRevenueSnapshot[]
-  revenueIssues       RevenueIssue[]
-  stripeEvents        StripeEvent[]
-  createdAt           DateTime                @default(now())
-  updatedAt           DateTime                @updatedAt
+  id              String                 @id @default(uuid())
+  name            String
+  emailEnabled    Boolean                @default(true)
+  slackEnabled    Boolean                @default(false)
+  slackWebhookUrl String?
+  slackWebhookIV  String?
+  users           User[]
+  stripeAccount   StripeAccount?
+  dailySnapshots  DailyRevenueSnapshot[]
+  revenueIssues   RevenueIssue[]
+  stripeEvents    StripeEvent[]
+  createdAt       DateTime               @default(now())
+  updatedAt       DateTime               @updatedAt
 
   @@index([name])
 }
 
 model StripeAccount {
-  id                 String       @id @default(uuid())
-  organizationId     String       @unique
-  organization       Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  encryptedApiKey    String
-  encryptionIV       String
-  mode               String
-  stripeAccountId    String       @unique
-  stripeAccountName  String?
-  createdAt          DateTime     @default(now())
-  updatedAt          DateTime     @updatedAt
+  id                String       @id @default(uuid())
+  organizationId    String       @unique
+  organization      Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  encryptedApiKey   String
+  encryptionIV      String
+  mode              String
+  stripeAccountId   String       @unique
+  stripeAccountName String?
+  createdAt         DateTime     @default(now())
+  updatedAt         DateTime     @updatedAt
 
   @@index([organizationId])
   @@index([stripeAccountId])
@@ -83,17 +84,17 @@ model StripeEvent {
 }
 
 model DailyRevenueSnapshot {
-  id                     String          @id @default(uuid())
-  organizationId         String
-  organization           Organization    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  date                   DateTime        @db.Date
-  totalRevenueAtRisk     Float
-  mrrAffectedPercentage  Float
-  currentMRR             Float
-  issueCountByType       Json
-  isPartial              Boolean         @default(false)
-  revenueIssues          RevenueIssue[]
-  createdAt              DateTime        @default(now())
+  id                    String         @id @default(uuid())
+  organizationId        String
+  organization          Organization   @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  date                  DateTime       @db.Date
+  totalRevenueAtRisk    Float
+  mrrAffectedPercentage Float
+  currentMRR            Float
+  issueCountByType      Json
+  isPartial             Boolean        @default(false)
+  revenueIssues         RevenueIssue[]
+  createdAt             DateTime       @default(now())
 
   @@unique([organizationId, date])
   @@index([organizationId])
@@ -101,9 +102,11 @@ model DailyRevenueSnapshot {
 }
 
 model RevenueIssue {
-  id             String               @id @default(uuid())
+  id             String               @id @default(cuid())
   organizationId String
   organization   Organization         @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  userId         String
+  user           User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
   snapshotId     String
   snapshot       DailyRevenueSnapshot @relation(fields: [snapshotId], references: [id], onDelete: Cascade)
   type           String
