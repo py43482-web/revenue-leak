@@ -81,7 +81,6 @@ CREATE TABLE "DailyRevenueSnapshot" (
 CREATE TABLE "RevenueIssue" (
     "id" TEXT NOT NULL,
     "organizationId" TEXT NOT NULL,
-    "userId" TEXT NOT NULL,
     "snapshotId" TEXT NOT NULL,
     "type" TEXT NOT NULL,
     "customerEmail" TEXT NOT NULL,
@@ -92,6 +91,25 @@ CREATE TABLE "RevenueIssue" (
     "detectedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
     CONSTRAINT "RevenueIssue_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "Subscription" (
+    "id" TEXT NOT NULL,
+    "organizationId" TEXT NOT NULL,
+    "stripeSubscriptionId" TEXT NOT NULL,
+    "stripeCustomerId" TEXT NOT NULL,
+    "status" TEXT NOT NULL,
+    "tier" TEXT NOT NULL,
+    "pricePerMonth" INTEGER NOT NULL,
+    "calculatedARR" DOUBLE PRECISION,
+    "currentPeriodStart" TIMESTAMP(3) NOT NULL,
+    "currentPeriodEnd" TIMESTAMP(3) NOT NULL,
+    "cancelAtPeriodEnd" BOOLEAN NOT NULL DEFAULT false,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "Subscription_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateIndex
@@ -166,6 +184,24 @@ CREATE INDEX "RevenueIssue_priority_idx" ON "RevenueIssue"("priority");
 -- CreateIndex
 CREATE INDEX "RevenueIssue_amount_idx" ON "RevenueIssue"("amount");
 
+-- CreateIndex
+CREATE UNIQUE INDEX "Subscription_organizationId_key" ON "Subscription"("organizationId");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "Subscription_stripeSubscriptionId_key" ON "Subscription"("stripeSubscriptionId");
+
+-- CreateIndex
+CREATE INDEX "Subscription_organizationId_idx" ON "Subscription"("organizationId");
+
+-- CreateIndex
+CREATE INDEX "Subscription_stripeSubscriptionId_idx" ON "Subscription"("stripeSubscriptionId");
+
+-- CreateIndex
+CREATE INDEX "Subscription_stripeCustomerId_idx" ON "Subscription"("stripeCustomerId");
+
+-- CreateIndex
+CREATE INDEX "Subscription_status_idx" ON "Subscription"("status");
+
 -- AddForeignKey
 ALTER TABLE "User" ADD CONSTRAINT "User_organizationId_fkey" FOREIGN KEY ("organizationId") REFERENCES "Organization"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
@@ -185,7 +221,7 @@ ALTER TABLE "DailyRevenueSnapshot" ADD CONSTRAINT "DailyRevenueSnapshot_organiza
 ALTER TABLE "RevenueIssue" ADD CONSTRAINT "RevenueIssue_organizationId_fkey" FOREIGN KEY ("organizationId") REFERENCES "Organization"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "RevenueIssue" ADD CONSTRAINT "RevenueIssue_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE "RevenueIssue" ADD CONSTRAINT "RevenueIssue_snapshotId_fkey" FOREIGN KEY ("snapshotId") REFERENCES "DailyRevenueSnapshot"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "RevenueIssue" ADD CONSTRAINT "RevenueIssue_snapshotId_fkey" FOREIGN KEY ("snapshotId") REFERENCES "DailyRevenueSnapshot"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE "Subscription" ADD CONSTRAINT "Subscription_organizationId_fkey" FOREIGN KEY ("organizationId") REFERENCES "Organization"("id") ON DELETE CASCADE ON UPDATE CASCADE;

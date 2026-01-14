@@ -46,12 +46,16 @@ export default function OnboardingPage() {
     setIsSubmitting(true);
 
     try {
+      // Fetch CSRF token
+      const csrfResponse = await fetch('/api/csrf-token');
+      const { csrfToken } = await csrfResponse.json();
+
       const response = await fetch('/api/stripe/connect', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ apiKey, mode }),
+        body: JSON.stringify({ apiKey, mode, csrfToken }),
       });
 
       const data = await response.json();
@@ -62,7 +66,8 @@ export default function OnboardingPage() {
         return;
       }
 
-      router.push('/dashboard');
+      // Redirect to pricing page after successful Stripe connection
+      router.push('/subscription/pricing');
     } catch (error) {
       setError('An error occurred while connecting to Stripe');
       setIsSubmitting(false);

@@ -14,16 +14,25 @@ export async function POST(request: NextRequest) {
     // Verify webhook signature
     let event: Stripe.Event;
     try {
-      const stripe = new Stripe(process.env.STRIPE_WEBHOOK_SECRET || '', {
-        apiVersion: '2023-10-16',
+      // We need a Stripe instance just for webhook verification
+      // Use a dummy key since we only need the webhooks utility
+      const stripe = new Stripe('sk_test_dummy', {
+        apiVersion: '2025-12-15.clover',
       });
+
+      const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
+      if (!webhookSecret) {
+        console.error('STRIPE_WEBHOOK_SECRET not configured');
+        return NextResponse.json({ error: 'Configuration error' }, { status: 500 });
+      }
+
       event = stripe.webhooks.constructEvent(
         rawBody,
         signature,
-        process.env.STRIPE_WEBHOOK_SECRET || ''
+        webhookSecret
       );
     } catch (err: any) {
-      console.error('Webhook signature verification failed:', err.message);
+      console.error('Webhook signature verification failed');
       return NextResponse.json({ error: 'Invalid signature' }, { status: 400 });
     }
 
@@ -81,7 +90,7 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ received: true }, { status: 200 });
   } catch (error) {
-    console.error('Webhook processing error:', error);
+    console.error('Webhook processing error occurred');
     // Return 200 to prevent Stripe retries
     return NextResponse.json({ received: true }, { status: 200 });
   }

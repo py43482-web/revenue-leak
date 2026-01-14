@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import Stripe from 'stripe';
 import { prisma } from '@/lib/db';
 import { getStripeClient } from '@/lib/stripe-client';
+import { validateCronSecret } from '@/lib/cron-auth';
 
 interface RevenueIssue {
   type: string;
@@ -16,9 +17,9 @@ export async function GET(request: NextRequest) {
   const startTime = Date.now();
 
   try {
-    // Verify CRON_SECRET
+    // Verify CRON_SECRET using timing-safe comparison
     const authHeader = request.headers.get('authorization');
-    if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
+    if (!validateCronSecret(authHeader)) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
@@ -61,7 +62,6 @@ export async function GET(request: NextRequest) {
             )
           };
 
-          
           for (const invoice of pastDueInvoices.data) {
             if (invoice.customer && typeof invoice.customer === 'string') {
               try {
@@ -83,12 +83,12 @@ export async function GET(request: NextRequest) {
                   },
                 });
               } catch (err) {
-                console.error('Error fetching customer:', err);
+                console.error('Error fetching customer for past due invoice');
               }
             }
           }
         } catch (err) {
-          console.error('Error fetching past due invoices:', err);
+          console.error('Error fetching past due invoices');
           isPartial = true;
         }
 
@@ -100,11 +100,17 @@ export async function GET(request: NextRequest) {
           });
 
           for (const invoice of openInvoices.data) {
-            if (invoice.subscription) {
+            // Check if invoice has a subscription (type-safe check)
+            const subscriptionId =
+              'subscription' in invoice && invoice.subscription
+                ? typeof invoice.subscription === 'string'
+                  ? invoice.subscription
+                  : (invoice.subscription as any)?.id
+                : null;
+
+            if (subscriptionId) {
               try {
-                const subscription = await stripe.subscriptions.retrieve(
-                  invoice.subscription as string
-                );
+                const subscription = await stripe.subscriptions.retrieve(subscriptionId);
 
                 if (invoice.customer && typeof invoice.customer === 'string') {
                   const customer = await stripe.customers.retrieve(invoice.customer);
@@ -137,12 +143,12 @@ export async function GET(request: NextRequest) {
                   });
                 }
               } catch (err) {
-                console.error('Error processing subscription invoice:', err);
+                console.error('Error processing subscription invoice');
               }
             }
           }
         } catch (err) {
-          console.error('Error fetching open invoices:', err);
+          console.error('Error fetching open invoices');
           isPartial = true;
         }
 
@@ -150,9 +156,12 @@ export async function GET(request: NextRequest) {
         try {
           let hasMore = true;
           let startingAfter: string | undefined = undefined;
+          let customerIterations = 0;
+          const MAX_CUSTOMER_ITERATIONS = 50; // Max 5000 customers
 
-          while (hasMore) {
-            const customers = await stripe.customers.list({
+          while (hasMore && customerIterations < MAX_CUSTOMER_ITERATIONS) {
+            customerIterations++;
+            const customers: Stripe.ApiList<Stripe.Customer> = await stripe.customers.list({
               limit: 100,
               starting_after: startingAfter,
             });
@@ -171,7 +180,7 @@ export async function GET(request: NextRequest) {
                     );
 
                     if (daysUntilExpiry <= 30 && daysUntilExpiry >= 0) {
-                      const subscriptions = await stripe.subscriptions.list({
+                      const subscriptions: Stripe.ApiList<Stripe.Subscription> = await stripe.subscriptions.list({
                         customer: customer.id,
                         status: 'active',
                         limit: 100,
@@ -210,7 +219,7 @@ export async function GET(request: NextRequest) {
                     }
                   }
                 } catch (err) {
-                  console.error('Error checking payment method:', err);
+                  console.error('Error checking payment method');
                 }
               }
             }
@@ -221,26 +230,23 @@ export async function GET(request: NextRequest) {
             }
           }
         } catch (err) {
-          console.error('Error fetching customers for expiring cards:', err);
+          console.error('Error fetching customers for expiring cards');
           isPartial = true;
         }
 
         // 4. Open Chargebacks (Disputes)
         try {
-          const needsResponseDisputes = await stripe.disputes.list({
-            status: 'needs_response',
+          // List all disputes and filter by status
+          const allDisputesList = await stripe.disputes.list({
             limit: 100,
           });
 
-          const underReviewDisputes = await stripe.disputes.list({
-            status: 'under_review',
-            limit: 100,
-          });
-
-          const allDisputes = [
-            ...needsResponseDisputes.data,
-            ...underReviewDisputes.data,
-          ];
+          // Filter for disputes that need attention
+          const allDisputes = allDisputesList.data.filter(
+            (dispute) =>
+              dispute.status === 'needs_response' ||
+              dispute.status === 'under_review'
+          );
 
           for (const dispute of allDisputes) {
             try {
@@ -270,11 +276,11 @@ export async function GET(request: NextRequest) {
                 },
               });
             } catch (err) {
-              console.error('Error processing dispute:', err);
+              console.error('Error processing dispute');
             }
           }
         } catch (err) {
-          console.error('Error fetching disputes:', err);
+          console.error('Error fetching disputes');
           isPartial = true;
         }
 
@@ -283,9 +289,12 @@ export async function GET(request: NextRequest) {
         try {
           let hasMore = true;
           let startingAfter: string | undefined = undefined;
+          let subscriptionIterations = 0;
+          const MAX_SUBSCRIPTION_ITERATIONS = 50; // Max 5000 subscriptions
 
-          while (hasMore) {
-            const subscriptions = await stripe.subscriptions.list({
+          while (hasMore && subscriptionIterations < MAX_SUBSCRIPTION_ITERATIONS) {
+            subscriptionIterations++;
+            const subscriptions: Stripe.ApiList<Stripe.Subscription> = await stripe.subscriptions.list({
               status: 'active',
               limit: 100,
               starting_after: startingAfter,
@@ -311,7 +320,7 @@ export async function GET(request: NextRequest) {
             }
           }
         } catch (err) {
-          console.error('Error calculating MRR:', err);
+          console.error('Error calculating MRR');
           isPartial = true;
           currentMRR = 0;
         }
@@ -435,7 +444,7 @@ export async function GET(request: NextRequest) {
         // Send alerts if needed (if email/slack utilities exist)
         // This will be implemented when email.ts and slack.ts are created
       } catch (error) {
-        console.error(`Error processing organization ${org.id}:`, error);
+        console.error('Error processing organization');
         // Continue processing other organizations
       }
     }
@@ -450,7 +459,7 @@ export async function GET(request: NextRequest) {
       timestamp: new Date().toISOString(),
     });
   } catch (error) {
-    console.error('Cron job error:', error);
+    console.error('Cron job error occurred');
     return NextResponse.json(
       {
         success: false,

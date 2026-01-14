@@ -3,6 +3,7 @@ import Stripe from 'stripe';
 import { getSession } from '@/lib/auth';
 import { prisma } from '@/lib/db';
 import { encryptSecret } from '@/lib/stripe-client';
+import { validateCsrfToken } from '@/lib/csrf';
 
 export async function POST(request: NextRequest) {
   try {
@@ -12,7 +13,16 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { apiKey, mode } = body;
+    const { apiKey, mode, csrfToken } = body;
+
+    // Validate CSRF token
+    const isValidCsrf = await validateCsrfToken(csrfToken);
+    if (!isValidCsrf) {
+      return NextResponse.json(
+        { error: 'Invalid security token. Please refresh the page and try again.' },
+        { status: 403 }
+      );
+    }
 
     // Validate input
     if (!apiKey || !mode) {
@@ -49,7 +59,7 @@ export async function POST(request: NextRequest) {
     let stripeAccount;
     try {
       const stripe = new Stripe(apiKey, {
-        apiVersion: '2023-10-16',
+        apiVersion: '2025-12-15.clover',
       });
       stripeAccount = await stripe.accounts.retrieve();
     } catch (error: any) {

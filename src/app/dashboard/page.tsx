@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
+import DemoBanner from '@/components/DemoBanner';
 
 interface Snapshot {
   date: string;
@@ -40,6 +41,18 @@ export default function DashboardPage() {
 
   const fetchData = async () => {
     try {
+      // Check subscription status first
+      const subscriptionResponse = await fetch('/api/subscription/status');
+      if (subscriptionResponse.ok) {
+        const subscriptionData = await subscriptionResponse.json();
+
+        // If no active subscription, redirect to pricing
+        if (!subscriptionData.hasActiveSubscription) {
+          router.push('/subscription/pricing');
+          return;
+        }
+      }
+
       // Check if Stripe is connected
       const stripeResponse = await fetch('/api/stripe/account');
       if (stripeResponse.status === 404) {
@@ -131,6 +144,7 @@ export default function DashboardPage() {
 
   return (
     <div className="min-h-screen bg-gray-50">
+      <DemoBanner />
       <Header onLogout={handleLogout} />
 
       <div className="max-w-4xl mx-auto px-4 py-6">

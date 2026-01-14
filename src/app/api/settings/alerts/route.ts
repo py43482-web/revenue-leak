@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getSession } from '@/lib/auth';
 import { prisma } from '@/lib/db';
 import { encryptSecret } from '@/lib/stripe-client';
+import { validateCsrfToken } from '@/lib/csrf';
 
 export async function GET(request: NextRequest) {
   try {
@@ -29,7 +30,7 @@ export async function GET(request: NextRequest) {
       slackWebhookUrl: maskedWebhook,
     });
   } catch (error) {
-    console.error('Get alert settings error:', error);
+    console.error('Get alert settings error occurred');
     return NextResponse.json({ error: 'An error occurred' }, { status: 500 });
   }
 }
@@ -42,7 +43,16 @@ export async function PUT(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { emailEnabled, emailAddress, slackWebhookUrl } = body;
+    const { emailEnabled, emailAddress, slackWebhookUrl, csrfToken } = body;
+
+    // Validate CSRF token
+    const isValidCsrf = await validateCsrfToken(csrfToken);
+    if (!isValidCsrf) {
+      return NextResponse.json(
+        { error: 'Invalid security token. Please refresh the page and try again.' },
+        { status: 403 }
+      );
+    }
 
     // Validate webhook URL if provided
     if (slackWebhookUrl && slackWebhookUrl !== '') {
@@ -127,7 +137,7 @@ export async function PUT(request: NextRequest) {
       slackEnabled: updatedOrg?.slackEnabled || false,
     });
   } catch (error) {
-    console.error('Update alert settings error:', error);
+    console.error('Update alert settings error occurred');
     return NextResponse.json({ error: 'An error occurred' }, { status: 500 });
   }
 }

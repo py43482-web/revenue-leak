@@ -1,11 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
+import { validateCronSecret } from '@/lib/cron-auth';
 
 export async function GET(request: NextRequest) {
   try {
-    // Verify CRON_SECRET
+    // Verify CRON_SECRET using timing-safe comparison
     const authHeader = request.headers.get('authorization');
-    if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
+    if (!validateCronSecret(authHeader)) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
@@ -24,7 +25,7 @@ export async function GET(request: NextRequest) {
       timestamp: new Date().toISOString(),
     });
   } catch (error) {
-    console.error('Session cleanup error:', error);
+    console.error('Session cleanup error occurred');
     return NextResponse.json(
       {
         success: false,

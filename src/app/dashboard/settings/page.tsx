@@ -50,10 +50,14 @@ export default function SettingsPage() {
     setMessage('');
 
     try {
+      // Fetch CSRF token
+      const csrfResponse = await fetch('/api/csrf-token');
+      const { csrfToken } = await csrfResponse.json();
+
       const response = await fetch('/api/settings/alerts', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(alertSettings),
+        body: JSON.stringify({ ...alertSettings, csrfToken }),
       });
 
       if (response.ok) {
@@ -97,8 +101,15 @@ export default function SettingsPage() {
     }
 
     try {
+      // Fetch CSRF token
+      const csrfResponse = await fetch('/api/csrf-token');
+      const { csrfToken } = await csrfResponse.json();
+
       const response = await fetch('/api/stripe/disconnect', {
         method: 'DELETE',
+        headers: {
+          'x-csrf-token': csrfToken,
+        },
       });
 
       if (response.ok) {

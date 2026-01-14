@@ -4,12 +4,32 @@ import { prisma } from '@/lib/db';
 import { sendDailyAlert } from '@/lib/email';
 import { sendSlackAlert } from '@/lib/slack';
 import { decryptSecret } from '@/lib/stripe-client';
+import { checkRateLimit, getRateLimitIdentifier } from '@/lib/rate-limit';
 
 export async function POST(request: NextRequest) {
   try {
     const user = await getSession();
     if (!user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    // Rate limiting: 3 test alerts per 5 minutes per user
+    const identifier = getRateLimitIdentifier(request);
+    const rateLimit = checkRateLimit(`test-alert:${user.id}:${identifier}`, {
+      maxRequests: 3,
+      windowMs: 5 * 60 * 1000, // 5 minutes
+    });
+
+    if (!rateLimit.allowed) {
+      return NextResponse.json(
+        { error: 'Too many test alerts. Please try again in a few minutes.' },
+        {
+          status: 429,
+          headers: {
+            'Retry-After': String(Math.ceil((rateLimit.resetAt - Date.now()) / 1000)),
+          },
+        }
+      );
     }
 
     const body = await request.json();
@@ -102,7 +122,7 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ error: 'Invalid type' }, { status: 400 });
   } catch (error) {
-    console.error('Test alert error:', error);
+    console.error('Test alert error occurred');
     return NextResponse.json(
       { error: 'Failed to send test alert' },
       { status: 500 }

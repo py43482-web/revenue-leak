@@ -2,11 +2,43 @@ import { NextRequest, NextResponse } from 'next/server';
 import bcrypt from 'bcrypt';
 import { randomBytes } from 'crypto';
 import { prisma } from '@/lib/db';
+import { checkRateLimit, getRateLimitIdentifier } from '@/lib/rate-limit';
+import { validatePassword } from '@/lib/password-validator';
+
+// HTML entity encoding for XSS prevention
+function sanitizeInput(input: string): string {
+  return input
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#x27;')
+    .replace(/\//g, '&#x2F;');
+}
 
 export async function POST(request: NextRequest) {
   try {
+    // Rate limiting: 3 signup attempts per hour per IP
+    const identifier = getRateLimitIdentifier(request);
+    const rateLimit = checkRateLimit(`signup:${identifier}`, {
+      maxRequests: 3,
+      windowMs: 60 * 60 * 1000, // 1 hour
+    });
+
+    if (!rateLimit.allowed) {
+      return NextResponse.json(
+        { error: 'Too many signup attempts. Please try again later.' },
+        {
+          status: 429,
+          headers: {
+            'Retry-After': String(Math.ceil((rateLimit.resetAt - Date.now()) / 1000)),
+          },
+        }
+      );
+    }
+
     const body = await request.json();
-    const { email, password, organizationName } = body;
+    let { email, password, organizationName } = body;
 
     // Validate input
     if (!email || !password || !organizationName) {
@@ -15,6 +47,12 @@ export async function POST(request: NextRequest) {
         { status: 400 }
       );
     }
+
+    // Normalize email to lowercase
+    email = email.toLowerCase().trim();
+
+    // Sanitize organization name to prevent XSS
+    organizationName = sanitizeInput(organizationName.trim());
 
     // Validate email format
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -25,21 +63,11 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Validate password
-    if (password.length < 8) {
+    // Validate password with enhanced policy
+    const passwordValidation = validatePassword(password);
+    if (!passwordValidation.isValid) {
       return NextResponse.json(
-        { error: 'Password must be at least 8 characters' },
-        { status: 400 }
-      );
-    }
-
-    // Validate password complexity
-    const hasUpperCase = /[A-Z]/.test(password);
-    const hasLowerCase = /[a-z]/.test(password);
-    const hasNumber = /[0-9]/.test(password);
-    if (!hasUpperCase || !hasLowerCase || !hasNumber) {
-      return NextResponse.json(
-        { error: 'Password must be at least 8 characters with uppercase, lowercase, and number' },
+        { error: passwordValidation.errors[0] }, // Return first error
         { status: 400 }
       );
     }
@@ -119,7 +147,7 @@ export async function POST(request: NextRequest) {
 
     return response;
   } catch (error) {
-    console.error('Signup error:', error);
+    console.error('Signup error occurred');
     return NextResponse.json(
       { error: 'An error occurred during signup' },
       { status: 500 }
